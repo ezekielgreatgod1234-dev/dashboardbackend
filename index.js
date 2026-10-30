@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 
 import authRoute from "./route/Auth.route.js";
+import artworkRoute from "./route/Artwork.route.js";
 
 dotenv.config();
 
@@ -21,6 +22,7 @@ app.use(
 app.use(express.json());
 
 app.use("/auth", authRoute);
+app.use("/artworks", artworkRoute);
 
 app.get("/", (req, res) => {
   res.json({ message: "API is running", status: true });
