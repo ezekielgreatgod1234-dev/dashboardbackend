@@ -70,12 +70,25 @@ const verifyPurchase = async (req, res) => {
     }
 
     const { amount, currency, metadata } = result.data;
+    const expectedAmount = artwork.price * 100;
+    const metaArtworkId = metadata?.artworkId ? String(metadata.artworkId) : null;
 
+    // metadata is only compared when Paystack sends it back; the amount + currency
+    // checks already stop someone paying less than the artwork costs.
     if (
       currency !== "NGN" ||
-      amount !== artwork.price * 100 ||
-      String(metadata?.artworkId) !== artwork.id
+      amount !== expectedAmount ||
+      (metaArtworkId && metaArtworkId !== artwork.id)
     ) {
+      // Shows up in your Render logs so you can see exactly which check failed
+      console.log("Payment mismatch:", {
+        reference,
+        paystackCurrency: currency,
+        paystackAmount: amount,
+        expectedAmount,
+        paystackMetadata: metadata,
+        artworkId: artwork.id,
+      });
       return res.status(StatusCodes.BAD_REQUEST).json({
         message: "Payment does not match this artwork",
         status: false,
