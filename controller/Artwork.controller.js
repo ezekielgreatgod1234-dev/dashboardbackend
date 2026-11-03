@@ -1,8 +1,9 @@
 import { StatusCodes } from "http-status-codes";
 import Artwork from "../model/Artwork.model.js";
+import Purchase from "../model/Purchase.model.js";
 import cloudinary, { uploadBuffer } from "../config/cloudinary.js";
 
-const formatArtwork = (art) => ({
+const formatArtwork = (art, extra = {}) => ({
   id: art.id,
   title: art.title,
   description: art.description,
@@ -11,6 +12,7 @@ const formatArtwork = (art) => ({
   seller: art.sellerName,
   status: art.status,
   createdAt: art.createdAt,
+  ...extra,
 });
 
 const destroyOriginal = (publicId) =>
@@ -110,13 +112,42 @@ const createArtwork = async (req, res) => {
   }
 };
 
-// GET /artworks/mine
+// GET /artworks/mine  (artworks I posted)
 const getMyArtworks = async (req, res) => {
   try {
     const artworks = await Artwork.find({ seller: req.user.id }).sort({ createdAt: -1 });
 
     res.status(StatusCodes.OK).json({
-      artworks: artworks.map(formatArtwork),
+      artworks: artworks.map((art) => formatArtwork(art)),
+      status: true,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Oops something went wrong",
+      status: false,
+    });
+  }
+};
+
+// GET /artworks  (marketplace: artworks posted by OTHER users)
+// purchaseId is set when this buyer has paid for a copy they haven't downloaded yet.
+const getMarketplace = async (req, res) => {
+  try {
+    const artworks = await Artwork.find({ seller: { $ne: req.user.id } }).sort({
+      createdAt: -1,
+    });
+
+    const waiting = await Purchase.find({
+      buyer: req.user.id,
+      downloaded: false,
+    }).select("artwork");
+    const waitingByArtwork = new Map(waiting.map((p) => [p.artwork.toString(), p.id]));
+
+    res.status(StatusCodes.OK).json({
+      artworks: artworks.map((art) =>
+        formatArtwork(art, { purchaseId: waitingByArtwork.get(art.id) || null })
+      ),
       status: true,
     });
   } catch (error) {
@@ -147,6 +178,18 @@ const deleteArtwork = async (req, res) => {
       });
     }
 
+    // Someone paid but hasn't downloaded yet - don't take the file away from them
+    const pendingDownload = await Purchase.exists({
+      artwork: artwork._id,
+      downloaded: false,
+    });
+    if (pendingDownload) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: "A buyer has paid for this artwork and hasn't downloaded it yet",
+        status: false,
+      });
+    }
+
     await Promise.all([
       destroyOriginal(artwork.originalPublicId).catch(console.log),
       destroyPreview(artwork.previewPublicId).catch(console.log),
@@ -163,4 +206,4 @@ const deleteArtwork = async (req, res) => {
   }
 };
 
-export { createArtwork, getMyArtworks, deleteArtwork };
+export { createArtwork, getMyArtworks, getMarketplace, deleteArtwork };

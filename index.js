@@ -5,6 +5,7 @@ import cors from "cors";
 
 import authRoute from "./route/Auth.route.js";
 import artworkRoute from "./route/Artwork.route.js";
+import purchaseRoute from "./route/Purchase.route.js";
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use(express.json());
 
 app.use("/auth", authRoute);
 app.use("/artworks", artworkRoute);
+app.use("/purchases", purchaseRoute);
 
 app.get("/", (req, res) => {
   res.json({ message: "API is running", status: true });
