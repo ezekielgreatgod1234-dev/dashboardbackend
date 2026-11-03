@@ -69,15 +69,22 @@ const verifyPurchase = async (req, res) => {
       });
     }
 
-    const { amount, currency, metadata } = result.data;
+    const { amount, requested_amount, fees, currency, metadata } = result.data;
     const expectedAmount = artwork.price * 100;
     const metaArtworkId = metadata?.artworkId ? String(metadata.artworkId) : null;
 
-    // metadata is only compared when Paystack sends it back; the amount + currency
-    // checks already stop someone paying less than the artwork costs.
+    // If your Paystack account makes the customer pay the transaction fee, "amount"
+    // is the price PLUS the fee. So the price may show up as requested_amount,
+    // as amount, or as amount minus fees. The buyer must have paid at least the price.
+    const amountOk =
+      amount >= expectedAmount &&
+      [requested_amount, amount, amount - (fees || 0)].some(
+        (value) => value === expectedAmount
+      );
+
     if (
       currency !== "NGN" ||
-      amount !== expectedAmount ||
+      !amountOk ||
       (metaArtworkId && metaArtworkId !== artwork.id)
     ) {
       // Shows up in your Render logs so you can see exactly which check failed
@@ -85,6 +92,8 @@ const verifyPurchase = async (req, res) => {
         reference,
         paystackCurrency: currency,
         paystackAmount: amount,
+        requestedAmount: requested_amount,
+        fees,
         expectedAmount,
         paystackMetadata: metadata,
         artworkId: artwork.id,
@@ -101,7 +110,7 @@ const verifyPurchase = async (req, res) => {
       buyer: req.user.id,
       buyerName: req.user.fullName,
       seller: artwork.seller,
-      amount: amount / 100,
+      amount: artwork.price, // the artwork's price, not the fee-inflated charge
       reference,
     });
 
